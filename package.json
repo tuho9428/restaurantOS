@@ -10,6 +10,7 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
+    "postinstall": "prisma generate",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write \"app/**/*.{ts,tsx,css}\" \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" \"*.config.*\" \"*.json\" README.md",

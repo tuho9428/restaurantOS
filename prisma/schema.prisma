@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RestaurantStatus {
+  ACTIVE
+  SUSPENDED
+  @@map("restaurant_status")
+}
+
+enum MembershipRole {
+  OWNER
+  MANAGER
+  HOST
+  INVENTORY
+  VIEWER
+  @@map("membership_role")
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+  @@map("membership_status")
+}
+
+enum ActorKind {
+  USER
+  SYSTEM
+  SQUARE
+  @@map("actor_kind")
+}
+
+model Restaurant {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String
+  slug               String
+  timezone           String             @default("America/Los_Angeles")
+  businessDayCutoff  DateTime           @default(dbgenerated("'03:00'::time")) @map("business_day_cutoff") @db.Time(0)
+  currency           String             @default("USD") @db.Char(3)
+  status             RestaurantStatus   @default(ACTIVE)
+  settingsVersion    Int                @default(1) @map("settings_version")
+  version            Int                @default(1)
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  locations          Location[]
+  memberships        Membership[]
+  auditLogs          AuditLog[]
+  policies           BusinessDayPolicy[]
+  @@map("restaurants")
+}
+
+model Location {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId      String              @map("restaurant_id") @db.Uuid
+  name              String
+  timezone          String
+  businessDayCutoff DateTime            @map("business_day_cutoff") @db.Time(0)
+  currency          String              @db.Char(3)
+  active            Boolean             @default(true)
+  archivedAt        DateTime?           @map("archived_at") @db.Timestamptz(6)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version           Int                 @default(1)
+  restaurant        Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  memberships       MembershipLocation[]
+  policies          BusinessDayPolicy[]
+  @@unique([restaurantId, id])
+  @@index([restaurantId, active, name])
+  @@map("locations")
+}
+
+model User {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String?
+  email         String
+  emailVerified DateTime?    @map("email_verified_at") @db.Timestamptz(6)
+  image         String?
+  disabledAt    DateTime?    @map("disabled_at") @db.Timestamptz(6)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  accounts      Account[]
+  sessions      Session[]
+  memberships   Membership[]
+  @@map("users")
+}
+
+model Account {
+  userId            String @map("user_id") @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  sessionToken        String   @unique @map("session_token")
+  userId              String   @map("user_id") @db.Uuid
+  expires              DateTime @db.Timestamptz(6)
+  lastAuthenticatedAt DateTime @map("last_authenticated_at") @db.Timestamptz(6)
+  businessCsrfToken  String?  @map("business_csrf_token")
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@index([expires])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime @db.Timestamptz(6)
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Membership {
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId   String             @map("restaurant_id") @db.Uuid
+  userId         String             @map("user_id") @db.Uuid
+  inviteEmail    String             @map("invite_email")
+  role           MembershipRole
+  status         MembershipStatus   @default(INVITED)
+  invitedByUserId String?           @map("invited_by_user_id") @db.Uuid
+  invitedAt      DateTime?          @map("invited_at") @db.Timestamptz(6)
+  acceptedAt     DateTime?          @map("accepted_at") @db.Timestamptz(6)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version        Int                @default(1)
+  restaurant     Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  user           User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  locations      MembershipLocation[]
+  @@unique([restaurantId, userId])
+  @@unique([restaurantId, id])
+  @@index([userId, status])
+  @@map("memberships")
+}
+
+model MembershipLocation {
+  restaurantId  String     @map("restaurant_id") @db.Uuid
+  membershipId  String     @map("membership_id") @db.Uuid
+  locationId    String     @map("location_id") @db.Uuid
+  membership    Membership @relation(fields: [restaurantId, membershipId], references: [restaurantId, id], onDelete: Restrict)
+  location      Location   @relation(fields: [restaurantId, locationId], references: [restaurantId, id], onDelete: Restrict)
+  @@id([restaurantId, membershipId, locationId])
+  @@index([restaurantId, locationId])
+  @@map("membership_locations")
+}
+
+model BusinessDayPolicy {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId     String   @map("restaurant_id") @db.Uuid
+  locationId       String   @map("location_id") @db.Uuid
+  policyVersion    Int      @map("policy_version")
+  timezone         String
+  cutoffLocal      DateTime @map("cutoff_local") @db.Time(0)
+  effectiveFrom    DateTime @map("effective_from") @db.Timestamptz(6)
+  effectiveTo      DateTime? @map("effective_to") @db.Timestamptz(6)
+  reason           String
+  createdByUserId  String   @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  restaurant       Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  location         Location @relation(fields: [restaurantId, locationId], references: [restaurantId, id], onDelete: Restrict)
+  @@unique([restaurantId, locationId, policyVersion])
+  @@unique([restaurantId, locationId, id])
+  @@index([restaurantId, locationId, effectiveFrom])
+  @@map("business_day_policies")
+}
+
+model AuditLog {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId    String    @map("restaurant_id") @db.Uuid
+  locationId      String?   @map("location_id") @db.Uuid
+  actorUserId     String?   @map("actor_user_id") @db.Uuid
+  actorKind       ActorKind @map("actor_kind")
+  requestId       String    @map("request_id")
+  action          String
+  entityType      String    @map("entity_type")
+  entityId        String    @map("entity_id")
+  reason          String?
+  beforeRedacted  Json?     @map("before_redacted") @db.JsonB
+  afterRedacted   Json?     @map("after_redacted") @db.JsonB
+  occurredAt      DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  restaurant      Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  @@index([restaurantId, occurredAt, id])
+  @@index([restaurantId, entityType, entityId, occurredAt])
+  @@map("audit_logs")
+}

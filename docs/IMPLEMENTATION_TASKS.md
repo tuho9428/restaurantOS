@@ -16,7 +16,7 @@ Schema batches are DATABASE's 001_identity_tenancy, 002_jobs_idempotency, 003_sq
 - **Objective:** Freeze dependency and external-evidence baseline.
 - **Dependencies:** None.
 - **Files or modules:** docs/IMPLEMENTATION_TASKS.md; docs/DEPENDENCY_BASELINE.md; package manifest/lockfile when implementation starts.
-- **Detailed behavior:** Resolve exact supported versions of Next.js, React, TypeScript, Auth.js and its adapter, Prisma, Zod, Tailwind/shadcn, Vitest, Playwright, and Node from official sources. Use PostgreSQL 17, square@46.0.0 with API 2026-09-16, and the Taste commit pinned in UI_DESIGN. Record installation commands, licenses, and compatibility decisions before installing dependencies.
+- **Detailed behavior:** Resolve exact supported versions of Next.js, React, TypeScript, Auth.js and its adapter, Prisma, Zod, Tailwind/shadcn, Vitest, Playwright, and Node from official sources. Use Neon PostgreSQL 18, square@46.0.0 with API 2026-09-16, and the Taste commit pinned in UI_DESIGN. Record installation commands, licenses, and compatibility decisions before installing dependencies.
 - **Edge cases:** Auth.js compatibility that requires a prerelease; SDK API rewrites; changes to Taste's main branch; unavailable database extensions.
 - **Acceptance criteria:** A reproducible compatibility matrix identifies exact versions. Production dependencies do not rely solely on latest tags or version ranges, and external verification is not fabricated.
 - **Required tests:** Review official package metadata, peer-dependency requirements, engine support, and documented SDK/API compatibility. Installation and the initial build belong to T002; Prisma generation belongs to T003. Defer live Square evidence to T066 and T067.
@@ -41,12 +41,13 @@ Schema batches are DATABASE's 001_identity_tenancy, 002_jobs_idempotency, 003_sq
 - **Task ID:** T003
 - **Objective:** Create tenant, identity and policy schema.
 - **Dependencies:** T002.
-- **Files or modules:** prisma/schema.prisma; prisma/migrations/001_identity_tenancy; src/server/db; compose.yaml.
-- **Detailed behavior:** Create the initial Prisma schema and configuration, generate Prisma Client, then implement the identity, authentication, membership, location, audit, and business-day policy structures defined in DATABASE, including composite scope keys. Configure PostgreSQL 17 in Compose and separate pooled runtime connections from direct migration connections. Seed one restaurant and location, use UTC instants, and persist explicit location grants. Install btree_gist in migration 001 before business-day policy exclusion constraints; later recipe and reservation migrations reuse the extension.
+- **Files or modules:** prisma/schema.prisma; prisma.config.ts; prisma/migrations/001_identity_tenancy; src/server/db; scripts/verify-database-targets.mjs.
+- **Detailed behavior:** Create the initial Prisma schema and configuration, generate Prisma Client, then implement the identity, authentication, membership, location, audit, and business-day policy structures defined in DATABASE, including composite scope keys. Configure Prisma 7 against Neon with restricted pooled runtime and privileged direct migration connections. Load `.env.local` in Prisma CLI configuration, use `SHADOW_DATABASE_URL` only for a separately provisioned disposable direct shadow branch, and never use development or test URLs for shadow operations. Migrations do not seed business rows; an explicit operator bootstrap provisions the restaurant and location. Use UTC instants and persist explicit location grants. Install btree_gist in migration 001 before business-day policy exclusion constraints; later recipe and reservation migrations reuse the extension.
 - **Edge cases:** Global Auth.js identities versus tenant-owned business records; the last-owner invariant requires a service transaction; restricted extension privileges during migration.
 - **Acceptance criteria:** The first Prisma Client generates from the reviewed schema and the migration applies to an empty database. Cross-scope foreign-key inserts fail, and business history cannot be deleted through cascading relations.
 - **Required tests:** Prisma Client generation, real PostgreSQL migration tests, composite foreign-key rejection tests, and an Auth.js adapter schema smoke test.
 - **Definition of done:** Shared definition of done, plus reviewed and committed migration SQL. Production setup does not use prisma db push.
+- **Status:** COMPLETE (2026-11-05). Prisma schema and generated-client policy are validated; migrations 001-003 are preserved and applied to test_1 and restaurantos-dev. Migration 001 is unchanged. Migration 003 removed only the exact unchanged seed rows with no dependent data; its test also proves a referenced matching placeholder is preserved. Neon endpoint identities, PostgreSQL 18, authenticated TLS, branch isolation, runtime/migration role separation, and pooled/direct URL assignments were reverified. Runtime permission checks and 8 PostgreSQL integration tests pass, including Auth.js session lifecycle, CAS races/stale writes, tenant FKs, uniqueness, policy overlap/adjacency, audit restrictions, and migration DDL isolation. Clean `npm ci` with `.env.local` absent generated Prisma Client successfully; `prisma validate`, `prisma generate`, lint, typecheck, format check, unit tests (8), contract tests (3), integration tests (8), and Webpack production build passed. Both migration deploys are no-ops on repeat and both statuses are up to date. T004 remains independently dependency-ready through T002; T005 is unblocked by T003 and retains its own implementation acceptance criteria.
 
 ### T004: Implement numeric, units and restaurant-time primitives
 
@@ -89,8 +90,8 @@ Schema batches are DATABASE's 001_identity_tenancy, 002_jobs_idempotency, 003_sq
 - **Task ID:** T007
 - **Objective:** Implement transactional mutation, audit and HTTP infrastructure.
 - **Dependencies:** T003, T004, T006.
-- **Files or modules:** prisma/migrations/002_jobs_idempotency; src/server/audit; idempotency; http; src/contracts/errors.ts.
-- **Detailed behavior:** Add request IDs, Zod validation and the shared error envelope, body limits, same-origin and CSRF enforcement, persistent rate-limit buckets, and idempotency body hashing with a unique request claim. Replay the exact original successful status and response. Commit audit records and the successful response with the business transaction. Add the durable job and schedule metadata schema from DATABASE. Migration 002 also creates notification_deliveries, operational_state, and durable schedule metadata; reservation-dependent notification foreign keys are added in migration 006. Implement authenticated GET /api/v1/csrf and constant-time validation of the current session token on custom staff writes; no unlisted client token source is assumed.
+- **Files or modules:** prisma/migrations/004_jobs_idempotency; src/server/audit; idempotency; http; src/contracts/errors.ts.
+- **Detailed behavior:** Add request IDs, Zod validation and the shared error envelope, body limits, same-origin and CSRF enforcement, persistent rate-limit buckets, and idempotency body hashing with a unique request claim. Replay the exact original successful status and response. Commit audit records and the successful response with the business transaction. Add the durable job and schedule metadata schema from DATABASE. Migration 004 also creates notification_deliveries, operational_state, and durable schedule metadata; reservation-dependent notification foreign keys are added in migration 008. Implement authenticated GET /api/v1/csrf and constant-time validation of the current session token on custom staff writes; no unlisted client token source is assumed.
 - **Edge cases:** The same key with a changed body; concurrent use of one key; transaction rollback; audit failure; seven-day cache expiry; PII in stored responses.
 - **Acceptance criteria:** Repeated requests cannot duplicate effects. A successful mutation requires durable audit, and rollback releases the request-key claim.
 - **Required tests:** Real database tests for concurrent replay, hash mismatch, forced transaction and audit failures, CSRF rejection, and 413/415 responses.
@@ -151,7 +152,7 @@ Schema batches are DATABASE's 001_identity_tenancy, 002_jobs_idempotency, 003_sq
 - **Task ID:** T012
 - **Objective:** Create Square canonical import schema.
 - **Dependencies:** T011.
-- **Files or modules:** prisma/migrations/003_square_sources; prisma/schema.prisma; src/server/square/repositories.
+- **Files or modules:** prisma/migrations/005_square_sources; prisma/schema.prisma; src/server/square/repositories.
 - **Detailed behavior:** Implement connection identity by merchant/environment, catalog objects, orders, lines, modifiers, return links, payments, refunds, webhook inbox, cursors, runs, and reconciliation issues from DATABASE. Source identity remains independent of credentials. Preserve tombstones and unresolved external references. Migration 003 includes source return headers/line links and refund allocation revision/line structures; T050 must not recreate them.
 - **Edge cases:** Token rotation; identical source IDs in sandbox and production; merchant-wide catalog objects; references resolved after their dependent records arrive.
 - **Acceptance criteria:** Duplicate external IDs cannot coexist within one connection. Normalized records exclude card and customer payloads.
@@ -261,11 +262,11 @@ Schema batches are DATABASE's 001_identity_tenancy, 002_jobs_idempotency, 003_sq
 - **Task ID:** T021
 - **Objective:** Create ingredient, recipe and cost-snapshot schema.
 - **Dependencies:** T012, T020.
-- **Files or modules:** prisma/migrations/004_ingredients_recipes; prisma/schema.prisma.
-- **Detailed behavior:** Implement ingredient/location/package/cost-history, recipe/version/component/mapping, sale-cost snapshot, and desired-consumption tables from DATABASE. Add unit, yield, loss, and recipe-interval constraints. Defer the receipt foreign key to migration 005. Support NO_EFFECT modifiers with a nullable recipe only for that effect.
+- **Files or modules:** prisma/migrations/006_ingredients_recipes; prisma/schema.prisma.
+- **Detailed behavior:** Implement ingredient/location/package/cost-history, recipe/version/component/mapping, sale-cost snapshot, and desired-consumption tables from DATABASE. Add unit, yield, loss, and recipe-interval constraints. Defer the receipt foreign key to migration 007. Support NO_EFFECT modifiers with a nullable recipe only for that effect.
 - **Edge cases:** Cross-scope ingredients; overlapping mappings; zero versus unknown cost; future publication; the temporarily deferred receipt reference.
 - **Acceptance criteria:** The migration rejects invalid loss, yield, scope, and overlapping effective intervals. Historical catalog mappings survive tombstones.
-- **Required tests:** PostgreSQL constraint tests and the migration 003-to-004 upgrade chain.
+- **Required tests:** PostgreSQL constraint tests and the migration 005-to-006 upgrade chain.
 - **Definition of done:** Shared definition of done, plus reviewed ingredient_locations locking identity and snapshot schema.
 
 ### T022: Implement ingredient, package and supplier CRUD
@@ -371,8 +372,8 @@ Schema batches are DATABASE's 001_identity_tenancy, 002_jobs_idempotency, 003_sq
 - **Task ID:** T030
 - **Objective:** Create purchasing and stock-ledger schema.
 - **Dependencies:** T021, T029.
-- **Files or modules:** prisma/migrations/005_purchasing_stock; prisma/schema.prisma.
-- **Detailed behavior:** Add purchase orders and receipts with lines, stock movements, physical counts and lines, immutable source keys, and cost-eligibility events. Complete the receipt foreign key deferred from migration 004. Enforce sign, nonzero, type, and scope constraints, with per-ingredient location locking identity. Do not introduce an independently authoritative mutable balance.
+- **Files or modules:** prisma/migrations/007_purchasing_stock; prisma/schema.prisma.
+- **Detailed behavior:** Add purchase orders and receipts with lines, stock movements, physical counts and lines, immutable source keys, and cost-eligibility events. Complete the receipt foreign key deferred from migration 006. Enforce sign, nonzero, type, and scope constraints, with per-ingredient location locking identity. Do not introduce an independently authoritative mutable balance.
 - **Edge cases:** Zero-variance counts; late movements effective before a count; receipt-reversal uniqueness; partially received purchase orders.
 - **Acceptance criteria:** SQL rejects duplicate posting keys and invalid movement signs. All prior migrations still apply unchanged.
 - **Required tests:** Migration constraint tests, count-anchor query fixtures, and source-posting key uniqueness tests.
@@ -493,7 +494,7 @@ Schema batches are DATABASE's 001_identity_tenancy, 002_jobs_idempotency, 003_sq
 - **Task ID:** T040
 - **Objective:** Create reservation and waitlist schema with database exclusion.
 - **Dependencies:** T007, T039.
-- **Files or modules:** prisma/migrations/006_reservations; prisma/schema.prisma.
+- **Files or modules:** prisma/migrations/008_reservations; prisma/schema.prisma.
 - **Detailed behavior:** Implement physical tables, combinations, settings, hours, blocks, reservations, allocations, and waitlist records with composite scope foreign keys and a per-location settings lock row. Use btree_gist exclusion over active buffered tstzrange intervals. Store one allocation per physical table and a permanent public request-key hash. Add seated_active per physical allocation, CHECK seated_active implies active, and a partial unique (restaurant_id,location_id,table_id) where seated_active.
 - **Edge cases:** Combinations sharing physical members; adjacent half-open intervals; foreign-tenant tables; allocations for terminal reservations; unavailable extensions.
 - **Acceptance criteria:** Direct SQL cannot create two overlapping active claims on one physical table. Inactive historical allocations do not block future availability.
@@ -615,7 +616,7 @@ Schema batches are DATABASE's 001_identity_tenancy, 002_jobs_idempotency, 003_sq
 - **Task ID:** T050
 - **Objective:** Add reporting, replay and export persistence.
 - **Dependencies:** T030, T040.
-- **Files or modules:** prisma/migrations/007_reporting_hardening; prisma/schema.prisma; operations repositories.
+- **Files or modules:** prisma/migrations/009_reporting_hardening; prisma/schema.prisma; operations repositories.
 - **Detailed behavior:** Create replay preview/results, bounded private export blobs and remaining dependent FKs from DATABASE; harden refund allocation indexes/constraints already introduced with Square schema 003. Add eligibility/current-revision indexes and nonnegative allocation checks; enforce DATABASE runtime-role grants and immutable posted-history triggers; sum validation uses a locked service transaction.
 - **Edge cases:** Refund allocation revisions; expired preview; orphan source order; blob over 10MiB; records from disabled users.
 - **Acceptance criteria:** All seven migrations apply fresh and upgrade fixtures; historical allocations/results cannot be overwritten.
@@ -786,7 +787,7 @@ Schema batches are DATABASE's 001_identity_tenancy, 002_jobs_idempotency, 003_sq
 - **Objective:** Prepare deployment, migrations and operational runbooks.
 - **Dependencies:** T010, T011, T058, T059, T060, T063.
 - **Files or modules:** deployment configs; .env.example; README.md; docs/RUNBOOKS.md; CI release workflow.
-- **Detailed behavior:** Document Vercel web+same-repo Node worker+managed PostgreSQL17, secret provisioning, SMTP, HTTPS, signature URL andpool/direct connections. Add additive migration once-before-rollout process, compatible web/worker releases, maintenance mode, rollback/forward-fix and owner health alert configuration.
+- **Detailed behavior:** Document Vercel web+same-repo Node worker+Neon PostgreSQL 18, secret provisioning, SMTP, HTTPS, signature URL andpool/direct connections. Add additive migration once-before-rollout process, compatible web/worker releases, maintenance mode, rollback/forward-fix and owner health alert configuration.
 - **Edge cases:** Missing btree_gist; serverless pool exhaustion; new worker on old schema; expired TLS callback; demo flags in prod.
 - **Acceptance criteria:** New staging deploy starts from instructions without undocumented secrets; worker and web release match; no production db push.
 - **Required tests:** Staging migration from prior release, fresh deploy, health smoke, secret/env failure and code rollback rehearsal.
@@ -851,19 +852,19 @@ Schema batches are DATABASE's 001_identity_tenancy, 002_jobs_idempotency, 003_sq
 
 ## Planning review disposition
 
-| Risk / contradiction found | Binding resolution | Verification |
-| --- | --- | --- |
-| Embedded source kickoff says implement Phase1 | Current user request is planning only. | No app code created. |
-| Personal token described as read-only permissions | Token is unrestricted; gateway allowlists reads; scoped OAuth deferred. | T013, T014, T060, T066. |
-| POS order.created/event coverage uncertain | Polling mandatory; events only hints; physical device evidence. | T018, T019, T067. |
-| Refund means reverse food stock | Money refunds retain prepared usage; explicit recoverable adjustment or source correction only. | T036, T051, T061. |
-| Old sales arrive after physical count | Immutable history retained; latest physical anchor absorbs earlier effective movements. | T035, T036, T061. |
-| Source close time changes across anchor | Quarantine inventory and preview old-time reversal/new-time replacement. | T016, T057. |
-| Returned order duplicates original sale/refund | Only own new sale lines count; canonical refund IDs once. | T016, T017, T051, T066. |
-| Unknown cost/mapping appears as zero margin cost | Null/coverage states and matched-subset denominator; no guessed quantity. | T028, T036, T052, T055. |
-| Concurrent combined-table booking | Serialized allocator plus DB exclusion on every physical table. | T040, T042, T049. |
-| Restore can reconstruct all local data from Square | Local reservations/receipts need backups/manual recovery; reopening controlled. | T065. |
-| Installed Taste version differs from linked repository | Use pinned linked source and app-screen guidance in UI_DESIGN. | T001, T008, T062. |
+| Risk / contradiction found                             | Binding resolution                                                                              | Verification            |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ----------------------- |
+| Embedded source kickoff says implement Phase1          | Current user request is planning only.                                                          | No app code created.    |
+| Personal token described as read-only permissions      | Token is unrestricted; gateway allowlists reads; scoped OAuth deferred.                         | T013, T014, T060, T066. |
+| POS order.created/event coverage uncertain             | Polling mandatory; events only hints; physical device evidence.                                 | T018, T019, T067.       |
+| Refund means reverse food stock                        | Money refunds retain prepared usage; explicit recoverable adjustment or source correction only. | T036, T051, T061.       |
+| Old sales arrive after physical count                  | Immutable history retained; latest physical anchor absorbs earlier effective movements.         | T035, T036, T061.       |
+| Source close time changes across anchor                | Quarantine inventory and preview old-time reversal/new-time replacement.                        | T016, T057.             |
+| Returned order duplicates original sale/refund         | Only own new sale lines count; canonical refund IDs once.                                       | T016, T017, T051, T066. |
+| Unknown cost/mapping appears as zero margin cost       | Null/coverage states and matched-subset denominator; no guessed quantity.                       | T028, T036, T052, T055. |
+| Concurrent combined-table booking                      | Serialized allocator plus DB exclusion on every physical table.                                 | T040, T042, T049.       |
+| Restore can reconstruct all local data from Square     | Local reservations/receipts need backups/manual recovery; reopening controlled.                 | T065.                   |
+| Installed Taste version differs from linked repository | Use pinned linked source and app-screen guidance in UI_DESIGN.                                  | T001, T008, T062.       |
 
 Live credentials, merchant entitlement and physical POS behavior cannot be proven by writing this plan. They are explicit acceptance gates, not assumed capabilities. The implementation can proceed with fake fixtures while these gates remain NOT_RUN.
 

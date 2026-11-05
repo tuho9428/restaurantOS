@@ -4,7 +4,7 @@ Planning baseline: November 4, 2026. Tests must demonstrate business integrity, 
 
 ## Test structure and execution
 
-Use Vitest for pure and service tests, a real PostgreSQL 17 test database for persistence/concurrency/migrations, and Playwright for browser journeys. Never substitute SQLite or mocked Prisma calls for exclusion constraints, transactions, numeric precision, or uniqueness verification. Keep one local Docker Compose database and isolated databases/schemas per parallel test worker. Never point automated tests at a production database or use production Square credentials.
+Use Vitest for pure and service tests, a real isolated Neon PostgreSQL 18 test branch for persistence/concurrency/migrations, and Playwright for browser journeys. Never substitute SQLite or mocked Prisma calls for exclusion constraints, transactions, numeric precision, or uniqueness verification. Local Windows development requires no Docker or local PostgreSQL; provision isolated Neon branches for parallel workers. Never point automated tests at a production database or use production Square credentials.
 
 | Layer | Location | What it proves |
 | --- | --- | --- |

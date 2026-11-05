@@ -6,7 +6,7 @@ implemented only in their dependency-ordered tasks.
 
 ## Local setup
 
-Use Node.js 24.22.2 (`.nvmrc`) and npm. Copy `.env.example` to `.env.local`, then install and run:
+Use Node.js 24.22.2 (`.nvmrc`) and npm. Set development, test, and disposable shadow Neon branch variables in `.env.local`, then install and run. Prisma CLI loads this file through `prisma.config.ts`; never place production credentials in local development configuration:
 
 ```powershell
 Copy-Item .env.example .env.local
@@ -35,8 +35,7 @@ build uses Next.js webpack because Turbopack 16.4.5 fails to start its PostCSS w
 validated Windows host. The system sans stack avoids a build-time Google Fonts request.
 
 The contract suite checks the server environment boundary; integration and browser suites are
-scaffolded for later tasks. The Prisma migration
-command becomes usable after T003 adds the first schema/migration. The worker command deliberately
+scaffolded for later tasks. Use `DATABASE_URL` for the restricted pooled runtime role, `DATABASE_URL_UNPOOLED` for direct development migrations, `TEST_DATABASE_URL` and `TEST_DIRECT_DATABASE_URL` for the restricted pooled test role and direct test migrations, and a separate disposable direct `SHADOW_DATABASE_URL` for migration development. Provision development/test runtime credentials with `node scripts/provision-runtime-role.mjs`; it writes only the pooled URL values in gitignored `.env.local`. Prisma 7 loads this file from `prisma.config.ts`; `migrate deploy` targets the privileged direct URL selected by `APP_ENV`. Production must provision a separate restricted runtime role and secret through its deployment process. The worker command deliberately
 exits with a clear not-implemented code until T011 adds the durable worker; it is not a placeholder
 for background work in this task.
 

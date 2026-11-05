@@ -1,5 +1,6 @@
 # Dependencies and generated application output
 node_modules/
+src/generated/prisma/
 .next/
 out/
 build/
