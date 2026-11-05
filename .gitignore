@@ -1,0 +1,22 @@
+# Dependencies and generated application output
+node_modules/
+.next/
+out/
+build/
+coverage/
+playwright-report/
+test-results/
+.vitest/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
