@@ -60,6 +60,7 @@ Schema batches are DATABASE's 001_identity_tenancy, 002_jobs_idempotency, 003_sq
 - **Acceptance criteria:** Documented numeric examples match exactly. Time utilities are independent of the host timezone, and invalid unit conversions are rejected.
 - **Required tests:** Unit tests for kg/g, L/ml, negative rounding ties, one-cent allocation, Decimal precision, DST spring/fall transitions, and the 03:00 cutoff.
 - **Definition of done:** Shared definition of done, plus deterministic pure functions and shared scalar contract schemas.
+- **Status:** COMPLETE (2026-11-05). Implemented exact BigInt money/cents and decimal arithmetic with 50-significant-digit division, HALF_UP quantization (negative ties away from zero), deterministic largest-remainder allocation, g/kg and L/ml conversions, compatible fractional each quantities, shared Zod scalar schemas, effective policy selection, IANA wall-time conversion, and half-open business-date windows. Unit tests: 32 passed; contract tests: 3 passed. `npm run lint`, `npm run typecheck`, `npm run format`, `npm run format:check`, and `npm run build` with `APP_ENV=test` passed. The production build uses the approved Webpack command. No database state or migrations were changed.
 
 ### T005: Implement invited magic-link authentication and bootstrap
 
