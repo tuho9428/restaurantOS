@@ -41,6 +41,24 @@ describe("restaurant business time", () => {
     );
   });
 
+  it.each([
+    ["02:30:30", "2026-03-08T10:00:00.000Z"],
+    ["02:59:59", "2026-03-08T10:00:00.000Z"],
+  ])("drops nonexistent cutoff seconds for %s", (cutoff, expected) => {
+    expect(
+      businessDayBoundary("2026-03-08", { timezone: "America/Los_Angeles", cutoff }).toISOString(),
+    ).toBe(expected);
+  });
+
+  it("resolves a non-one-hour DST gap without timezone-specific transition rules", () => {
+    expect(
+      businessDayBoundary("2026-10-04", {
+        timezone: "Australia/Lord_Howe",
+        cutoff: "02:15:45",
+      }).toISOString(),
+    ).toBe("2026-10-03T15:30:00.000Z");
+  });
+
   it("chooses the earlier occurrence for a repeated business cutoff", () => {
     const policy = { timezone: "America/Los_Angeles", cutoff: "01:30" };
     expect(businessDayBoundary("2026-11-01", policy).toISOString()).toBe(
@@ -66,6 +84,25 @@ describe("restaurant business time", () => {
     ).toThrow(/does not match/);
   });
 
+  it("preserves valid local times immediately before and after the spring gap", () => {
+    expect(localDateTimeToInstant("2026-03-08T01:59:59", "America/Los_Angeles")).toBe(
+      "2026-03-08T09:59:59.000Z",
+    );
+    expect(localDateTimeToInstant("2026-03-08T03:00:00", "America/Los_Angeles")).toBe(
+      "2026-03-08T10:00:00.000Z",
+    );
+  });
+
+  it("assigns instants around a gap-normalized business cutoff to the correct business dates", () => {
+    const gapCutoff = {
+      ...defaultPolicy,
+      cutoff: "02:30:30",
+    };
+    expect(businessDateForInstant("2026-03-08T09:59:59.999Z", gapCutoff)).toBe("2026-03-07");
+    expect(businessDateForInstant("2026-03-08T10:00:00.000Z", gapCutoff)).toBe("2026-03-08");
+    expect(businessDateForInstant("2026-03-08T10:00:00.001Z", gapCutoff)).toBe("2026-03-08");
+  });
+
   it("selects effective policy versions and produces half-open date ranges", () => {
     const prior = { ...defaultPolicy, effectiveTo: "2026-01-01T00:00:00.000Z" };
     const next = {
@@ -86,6 +123,22 @@ describe("restaurant business time", () => {
     ).toThrow(/overlap/);
     expect(() => effectiveBusinessTimePolicy("2026-01-01T00:00:00", [defaultPolicy])).toThrow(
       /explicit UTC offset/,
+    );
+  });
+
+  it.each([
+    "2025-02-30T12:00:00Z",
+    "2025-02-29T12:00:00Z",
+    "2026-04-31T12:00:00Z",
+    "2026-13-01T12:00:00Z",
+    "2026-01-00T12:00:00Z",
+  ])("rejects invalid calendar date in an instant: %s", (instant) => {
+    expect(() => effectiveBusinessTimePolicy(instant, [defaultPolicy])).toThrow(/calendar date/);
+  });
+
+  it("accepts a valid leap-day instant", () => {
+    expect(effectiveBusinessTimePolicy("2024-02-29T12:00:00Z", [defaultPolicy])).toBe(
+      defaultPolicy,
     );
   });
 

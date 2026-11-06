@@ -93,6 +93,9 @@ function instantEpoch(value: string | Date): number {
   if (!INSTANT_PATTERN.test(value)) {
     throw new TypeError("Instant must include Z or an explicit UTC offset");
   }
+  // Date.parse normalizes some invalid dates (for example February 30), so validate the
+  // civil calendar portion before parsing the offset-bearing timestamp.
+  parseDate(value.slice(0, 10));
   const epoch = Date.parse(value);
   if (!Number.isFinite(epoch)) throw new TypeError("Invalid instant");
   return epoch;
@@ -222,9 +225,12 @@ export function businessDayBoundary(
   let candidates = candidateInstants(target, policy.timezone);
   if (candidates.length > 0) return new Date(candidates[0]!);
 
-  const nominal = wallEpoch(target);
-  for (let minute = 1; minute <= 240; minute++) {
-    const next = new Date(nominal + minute * 60_000);
+  // In a gap, search whole local minutes from :00. This drops the nonexistent cutoff's
+  // seconds and resolves to the transition's first valid minute, regardless of gap length.
+  const searchStart = wallEpoch({ ...target, second: 0 });
+  const maxSearchMinutes = 48 * 60;
+  for (let minute = 0; minute <= maxSearchMinutes; minute++) {
+    const next = new Date(searchStart + minute * 60_000);
     const nextWall: WallTime = {
       year: next.getUTCFullYear(),
       month: next.getUTCMonth() + 1,
@@ -236,7 +242,7 @@ export function businessDayBoundary(
     candidates = candidateInstants(nextWall, policy.timezone);
     if (candidates.length > 0) return new Date(candidates[0]!);
   }
-  throw new RangeError("Could not resolve business cutoff within four hours");
+  throw new RangeError("Could not resolve business cutoff within 48 hours");
 }
 
 export function businessDayWindow(

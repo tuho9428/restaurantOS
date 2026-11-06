@@ -33,5 +33,13 @@ describe("shared scalar schemas", () => {
     expect(BusinessDateSchema.safeParse("2025-02-29").success).toBe(false);
     expect(InstantSchema.safeParse("2026-11-01T01:30:00-07:00").success).toBe(true);
     expect(InstantSchema.safeParse("2026-11-01T01:30:00").success).toBe(false);
+    expect(InstantSchema.safeParse("2025-02-30T12:00:00Z").success).toBe(false);
+    expect(InstantSchema.safeParse("2025-02-29T12:00:00Z").success).toBe(false);
+    expect(InstantSchema.safeParse("2024-02-29T12:00:00Z").success).toBe(true);
+    expect(InstantSchema.safeParse("2026-04-31T12:00:00Z").success).toBe(false);
+    expect(InstantSchema.safeParse("2026-13-01T12:00:00Z").success).toBe(false);
+    expect(InstantSchema.safeParse("2026-01-00T12:00:00Z").success).toBe(false);
+    expect(InstantSchema.safeParse("2026-01-01T12:00:00Z").success).toBe(true);
+    expect(InstantSchema.safeParse("2026-01-01T12:00:00+05:30").success).toBe(true);
   });
 });
