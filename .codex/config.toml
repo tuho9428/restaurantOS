@@ -1,0 +1,11 @@
+
+# RestaurantOS project-specific Codex configuration.
+# Keep any existing MCP servers or other settings when merging this file.
+
+[agents]
+enabled = true
+# Two reviewer subagents, in addition to the lead Codex session.
+max_concurrent_threads_per_session = 2
+
+# Custom agents are discovered from .codex/agents/*.toml.
+# The lead agent is the normal Codex session; no lead-agent file is needed.
